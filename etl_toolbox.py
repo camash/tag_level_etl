@@ -245,12 +245,12 @@ def file_to_tempdb(file_name, file_path, pk_string):
                     error_msg = "COPY csv to PG temp table fail..."
                     raise FileloadError(error_msg)
                 else:
+                    end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    file_success_val = (file_name, file_path, file_modify_time, end_time, "success", None,
+                                        end_time, "success", None)
+                    mysql_executor(file_log_result_sql, file_success_val)
                     return file_modify_time
 
-                end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                file_success_val = (file_name, file_path, file_modify_time, end_time, "success", None,
-                                 end_time, "success", None)
-                mysql_executor(file_log_result_sql, file_success_val)
             else:
                 # write HDFS get fail to log table and raise exception
                 print(file_name + " copy to local fail.")
@@ -285,11 +285,11 @@ def file_to_tempdb(file_name, file_path, pk_string):
                 error_msg = "COPY csv to PG temp table fail..."
                 raise FileloadError(error_msg)
             else:
+                end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                file_success_val = (file_name, file_path, file_modify_time, end_time, "success", None,
+                                    end_time, "success", None)
+                mysql_executor(file_log_result_sql, file_success_val)
                 return file_modify_time
-            end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            file_success_val = (file_name, file_path, file_modify_time, end_time, "success", None,
-                                end_time, "success", None)
-            mysql_executor(file_log_result_sql, file_success_val)
         else:
             # write HDFS get fail to log table and raise exception
             print(file_name + " copy to local fail.")
