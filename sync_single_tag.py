@@ -29,6 +29,10 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     log_tag_table  = mysql_tables_cfg['log_tag']
     cfg_pk_table = mysql_tables_cfg['pk_table']
 
+    # Get the source schema
+    pg_cfg = config['postgre']
+    temp_schema = pg_cfg['tmp_schema']
+
     # get tag sync detail, generate sql
     task_detail_sql = "select src_file_name, src_file_path, schema_name, table_name, tag_data_type, " + \
                       " tag_storage_type, upload_method from " + cfg_table + \
@@ -65,6 +69,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
         tb.mysql_executor(tag_log_sql, tag_log_val)
         raise LookupError(error_msg)
 
+    # add data to temp table and delete duplicates
     try:
         file_modify_time = tb.file_to_tempdb(file_name, file_path, pk_string[0][0])
     except FileloadError as e:
@@ -73,11 +78,22 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
                        start_time, end_time, "fail", str(e))
         tb.mysql_executor(tag_log_sql, tag_log_val)
     else:
-        end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        tag_log_val = (request_id, task_id, tag_name_en, file_name, file_modify_time,
-                       start_time, end_time, "success", None)
-        tb.mysql_executor(tag_log_sql, tag_log_val)
-        print("Start to tag insert...")
+        # start merge tags
+        try:
+            temp_table = file_name.split(".")[0]
+            print("Start to tag merge {}.{} ===> {}.{}...".format(temp_schema, temp_table, target_schema, target_table))
+            tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string, tag_name_en, tag_data_type)
+        except Exception as e:
+            end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            tag_log_val = (request_id, task_id, tag_name_en, file_name, None,
+                           start_time, end_time, "fail", str(e))
+            tb.mysql_executor(tag_log_sql, tag_log_val)
+            raise Exception(str(e))
+        else:
+            end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            tag_log_val = (request_id, task_id, tag_name_en, file_name, file_modify_time,
+                           start_time, end_time, "success", None)
+            tb.mysql_executor(tag_log_sql, tag_log_val)
 
 
 

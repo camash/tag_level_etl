@@ -55,13 +55,100 @@ def mysql_executor(sqlstring, values):
         print(mycursor.rowcount, "record inserted.")
 
 
-def postgre_executor(sql_string, sql_val):
+def postgre_executor(schema_name, sql_string, sql_val):
     """
     execute sql on Postgre database
+    :param schema_name: the schema of table located
     :param sql_string: the sql to be executed
     :param sql_val: the val substuted in the
     :return: if select return query result
     """
+    # read postgres connection info
+    config = configparser.ConfigParser()
+    config.read('connection.cfg')
+
+    pg_cfg = config['postgre']
+    pg_host = pg_cfg['pg_host']
+    pg_user = pg_cfg['pg_user']
+    pg_pass = pg_cfg['pg_pass']
+    pg_db = pg_cfg['pg_db']
+    # pg_port = pg_cfg['pg_port']
+    # tmp_schema = pg_cfg['tmp_schema']
+
+    # create a connection
+    try:
+        conn = psycopg2.connect(dbname=pg_db,
+                                user=pg_user,
+                                host=pg_host,
+                                password=pg_pass,
+                                options=f'-c search_path={schema_name}',
+                                )
+        cur = conn.cursor()
+        result = cur.execute(sql_string, sql_val)
+        print(result)
+        conn.commit()
+    except Exception as e:
+        error_msg = "PSQL execute error, {}".format(str(e))
+        print(error_msg)
+        raise Exception(error_msg)
+    else:
+        return result
+    finally:
+        conn.close()
+
+
+def cast_field_type(tag_name, tag_data_type):
+    """ cast tag data to the correct data type
+    :param tag_name:
+    :param tag_data_type:
+    :return: string of cast action
+    """
+    if tag_data_type == "string":
+        return tag_name
+    elif tag_data_type == "numeric":
+        return "cast ( {} as numeric)".format(tag_name)
+    elif tag_data_type == "bool":
+        return "cast ( {} as boolean)".format(tag_name)
+    elif tag_data_type == "enum":
+        return tag_name
+    else:
+        error_msg = "{}'s data_type: {} is not correct.".format(tag_name, tag_data_type)
+        raise Exception(error_msg)
+
+
+# merge new data
+def merge_tag(source_schema, source_table, target_schema, target_table, pk_string, tag_name, tag_data_type):
+    """
+
+    :param source_schema: the schema of source_table
+    :param source_table: the source table of csv data
+    :param target_schema: the schema of target table
+    :param target_table: target tag table
+    :param pk_string: primary key string
+    :param tag_name: tag name, equals target field name
+    :param tag_data_type:
+    :return:
+    """
+    merge_fields = "({}, {})".format(pk_string, tag_name)
+    cast_field = cast_field_type(tag_name, tag_data_type)
+    source_fields = "{}, {}".format(pk_string, cast_field)
+    merge_sql = "insert into "+ target_table + merge_fields +\
+                "   (select " + source_fields + " from " + source_schema + "." + source_table + ")" +\
+                " on conflict (" + pk_string + ") do update " +\
+                " set " + tag_name + " = excluded." + tag_name
+
+    print("The merge sql is:")
+    print(merge_sql)
+
+    try:
+        print("Start to merge table {}".format(target_table))
+        result = postgre_executor(target_schema, merge_sql, None)
+    except Exception as e:
+        raise Exception(str(e))
+    else:
+        print("PSQL execute result: {}".format(result))
+
+
 
 
 def load_csv_to_pg(table_name, local_file_path, pk_string):
