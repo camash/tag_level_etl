@@ -82,7 +82,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
         try:
             temp_table = file_name.split(".")[0]
             print("Start to tag merge {}.{} ===> {}.{}...".format(temp_schema, temp_table, target_schema, target_table))
-            tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string, tag_name_en, tag_data_type)
+            tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string[0][0], tag_name_en, tag_data_type)
         except Exception as e:
             end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             tag_log_val = (request_id, task_id, tag_name_en, file_name, None,
