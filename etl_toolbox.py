@@ -379,8 +379,8 @@ def file_to_tempdb(file_name, file_path, pk_string):
             # start load data to tmp table
             try:
                 end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
-            except:
-                error_msg = "COPY csv to PG temp table fail..."
+            except Exception as e:
+                error_msg = (str(e))
                 end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 file_error_val = (
                     file_name, file_path, file_modify_time, end_time, "fail", error_msg, end_time, "fail", error_msg)
