@@ -215,10 +215,13 @@ def load_csv_to_pg(table_name, local_file_path, pk_string):
                 "create table " + dedup_table_name + " as select * from ( " +\
                 " select a.*, row_number() over (partition by " + pk_string + ") as rrn from " + table_name + " a " +\
                 " ) b where b.rrn = 1"
-    cur.execute(dedup_sql)
-    conn.commit()
-
-    conn.close()
+    try:
+        cur.execute(dedup_sql)
+    except Exception as e:
+        raise FileloadError(str(e))
+    finally:
+        conn.commit()
+        conn.close()
 
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -283,6 +286,7 @@ def file_to_tempdb(file_name, file_path, pk_string):
 
     # if status is processing, wait
     if file_load_status == "processing":
+        print("Original File load status: {}".format(file_load_status))
         sleep_time = 30
         # wait 10 minute at most
         while sleep_time < 600 and file_load_status == "processing":
@@ -302,6 +306,7 @@ def file_to_tempdb(file_name, file_path, pk_string):
 
     # if status is success,
     if file_load_status == "success":
+        print("Original File load status: {}".format(file_load_status))
         if file_modify_time_obj <= file_time_in_log_obj:
             #try:
             #    end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
@@ -328,8 +333,13 @@ def file_to_tempdb(file_name, file_path, pk_string):
                 # start load data to tmp table
                 try:
                     end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
-                except:
-                    error_msg = "COPY csv to PG temp table fail..."
+                except Exception as e:
+                    error_msg = (str(e))
+                    end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    file_error_val = (
+                        file_name, file_path, file_modify_time, end_time, "fail", error_msg, end_time, "fail",
+                        error_msg)
+                    mysql_executor(file_log_result_sql, file_error_val)
                     raise FileloadError(error_msg)
                 else:
                     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -351,6 +361,7 @@ def file_to_tempdb(file_name, file_path, pk_string):
 
     # if status is fail, just start csv file loading
     if file_load_status == "fail":
+        print("Original File load status: {}".format(file_load_status))
         # start copy new data to local
         ## set log to processing
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -370,6 +381,10 @@ def file_to_tempdb(file_name, file_path, pk_string):
                 end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
             except:
                 error_msg = "COPY csv to PG temp table fail..."
+                end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                file_error_val = (
+                    file_name, file_path, file_modify_time, end_time, "fail", error_msg, end_time, "fail", error_msg)
+                mysql_executor(file_log_result_sql, file_error_val)
                 raise FileloadError(error_msg)
             else:
                 end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
