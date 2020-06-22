@@ -80,7 +80,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     else:
         # start merge tags
         try:
-            temp_table = file_name.split(".")[0]
+            temp_table = file_name.split(".")[0] + "_dedup"
             print("Start to tag merge {}.{} ===> {}.{}...".format(temp_schema, temp_table, target_schema, target_table))
             tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string[0][0], tag_name_en, tag_data_type)
         except Exception as e:
