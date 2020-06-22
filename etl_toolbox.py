@@ -108,7 +108,7 @@ def cast_field_type(tag_name, tag_data_type):
     elif tag_data_type == "numeric":
         return "cast ( {} as numeric)".format(tag_name)
     elif tag_data_type == "bool":
-        return "cast ( {} as boolean)".format(tag_name)
+        return "cast ( {} as bool)".format(tag_name)
     elif tag_data_type == "enum":
         return tag_name
     else:
