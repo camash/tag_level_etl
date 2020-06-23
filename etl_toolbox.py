@@ -170,6 +170,9 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
     # pg_port = pg_cfg['pg_port']
     tmp_schema = pg_cfg['tmp_schema']
 
+    path_cfg = config['paths']
+    md5_script = path_cfg['md5_script']
+
     # create a connection
     conn = psycopg2.connect(dbname=pg_db,
                             user=pg_user,
@@ -182,7 +185,7 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
     ## add a hash value for detail type csv
     if tag_storage_type == "detail":
         try:
-            ret_hash = subprocess.run(['md5_csv_line.sh', table_name + ".csv"])
+            ret_hash = subprocess.run([md5_script, table_name + ".csv"])
         except Exception as e:
             print(str(e))
         else:
