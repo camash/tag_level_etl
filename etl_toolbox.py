@@ -185,11 +185,11 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
     ## add a hash value for detail type csv
     if tag_storage_type == "detail":
         try:
-            ret_hash = subprocess.run([md5_script, table_name + ".csv"])
+            subprocess.run([md5_script, table_name + ".csv"])
         except Exception as e:
-            print(str(e))
+            print("md5 script failed: " + str(e))
         else:
-            local_file_path = local_file_path + ret_hash
+            local_file_path = local_file_path + ".detail"
             print("The detail file path is: {}".format(local_file_path))
 
     # drop the source table, may cause concurrent issue  <<<<<<<

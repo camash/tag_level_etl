@@ -13,10 +13,8 @@ CSV_FOLDER=`grep "csv_base" connection.cfg | cut -d= -f2`
 cd "${CSV_FOLDER}"
 
 CSV_FILE="$@"
-echo "$CSV_FILE"
 
 HASH_FILE="$CSV_FILE"".hash"
-echo ${HASH_FILE}
 
 SUFFIX=".detail"
 LOAD_FILE="${CSV_FILE}""${SUFFIX}"
@@ -33,7 +31,5 @@ sed -i '1s/^.*$/line_hash/' "${HASH_FILE}"
 paste -d"," "${CSV_FILE}" "${HASH_FILE}" > "${LOAD_FILE}"
 
 if [ $? -eq 0 ]; then
-  echo "${SUFFIX}"
-else
-  return 1
+  echo "Generate the hash column for ""${CSV_FILE}"" is done."
 fi
