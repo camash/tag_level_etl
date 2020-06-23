@@ -18,7 +18,8 @@ echo "$CSV_FILE"
 HASH_FILE="$CSV_FILE"".hash"
 echo ${HASH_FILE}
 
-LOAD_FILE="${CSV_FILE}"".detail"
+SUFFIX=".detail"
+LOAD_FILE="${CSV_FILE}""${SUFFIX}"
 echo ${LOAD_FILE}
 
 cat /dev/null > "${HASH_FILE}"
@@ -30,3 +31,9 @@ done
 sed -i '1s/^.*$/line_hash/' "${HASH_FILE}"
 
 paste -d"," "${CSV_FILE}" "${HASH_FILE}" > "${LOAD_FILE}"
+
+if [ $? -eq 0 ]; then
+  echo "${SUFFIX}"
+else
+  return 1
+fi

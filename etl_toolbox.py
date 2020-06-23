@@ -132,9 +132,9 @@ def merge_tag(source_schema, source_table, target_schema, target_table, pk_strin
     merge_fields = "({}, {})".format(pk_string, tag_name)
     cast_field = cast_field_type(tag_name, tag_data_type)
     source_fields = "{}, {}".format(pk_string, cast_field)
-    merge_sql = "insert into "+ target_table + merge_fields +\
-                "   (select " + source_fields + " from " + source_schema + "." + source_table + ")" +\
-                " on conflict (" + pk_string + ") do update " +\
+    merge_sql = "insert into " + target_table + merge_fields + \
+                "   (select " + source_fields + " from " + source_schema + "." + source_table + ")" + \
+                " on conflict (" + pk_string + ") do update " + \
                 " set " + tag_name + " = excluded." + tag_name
 
     print("The merge sql is:")
@@ -149,13 +149,12 @@ def merge_tag(source_schema, source_table, target_schema, target_table, pk_strin
         print("PSQL execute result: {}".format(result))
 
 
-
-
-def load_csv_to_pg(table_name, local_file_path, pk_string):
+def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
     """ load local file to postgresql
     :param table_name: the table_name of the file
     :param local_file_path: the file in the local path
     :param pk_string: the primary key string
+    :param tag_storage_type: tag or detail type
     :return:
     """
 
@@ -179,6 +178,16 @@ def load_csv_to_pg(table_name, local_file_path, pk_string):
                             options=f'-c search_path={tmp_schema}',
                             )
     cur = conn.cursor()
+
+    ## add a hash value for detail type csv
+    if tag_storage_type == "detail":
+        try:
+            ret_hash = subprocess.run(['md5_csv_line.sh', table_name + ".csv"])
+        except Exception as e:
+            print(str(e))
+        else:
+            local_file_path = local_file_path + ret_hash
+            print("The detail file path is: {}".format(local_file_path))
 
     # drop the source table, may cause concurrent issue  <<<<<<<
     drop_tmp_sql = "drop table if exists " + table_name
@@ -211,9 +220,9 @@ def load_csv_to_pg(table_name, local_file_path, pk_string):
 
     # delete duplicated
     dedup_table_name = table_name + '_dedup'
-    dedup_sql = "drop table if exists " + dedup_table_name + ";" +\
-                "create table " + dedup_table_name + " as select * from ( " +\
-                " select a.*, row_number() over (partition by " + pk_string + ") as rrn from " + table_name + " a " +\
+    dedup_sql = "drop table if exists " + dedup_table_name + ";" + \
+                "create table " + dedup_table_name + " as select * from ( " + \
+                " select a.*, row_number() over (partition by " + pk_string + ") as rrn from " + table_name + " a " + \
                 " ) b where b.rrn = 1"
     try:
         cur.execute(dedup_sql)
@@ -226,11 +235,12 @@ def load_csv_to_pg(table_name, local_file_path, pk_string):
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def file_to_tempdb(file_name, file_path, pk_string):
+def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type):
     """load file to tempdb in mysql
     :param file_name: the file name of algorithm output csv
     :param file_path: the file path in the HDFS
     :param pk_string: primary key list for the target table
+    :param tag_storage_type: tag or detail
     :return: file_modify_time , the time of hdfs csv file modified
     """
 
@@ -258,7 +268,6 @@ def file_to_tempdb(file_name, file_path, pk_string):
     file_modify_time_obj = datetime.strptime(file_modify_time, '%Y-%m-%d %H:%M:%S')
     print("{}'s modified @{}".format(file_path, file_modify_time))
 
-
     # get table name from file_name
     tmp_table_name = file_name.split('.')[0]
 
@@ -279,10 +288,9 @@ def file_to_tempdb(file_name, file_path, pk_string):
 
     # file load error log
     file_log_result_sql = "insert into " + log_file_table + \
-                   "(file_name,file_path,file_hdfs_time,end_time,status,error_msg) " + \
-                   " values (%s, %s, %s, %s, %s, %s)" + \
-                   " on DUPLICATE KEY UPDATE end_time=%s, status=%s, error_msg=%s"
-
+                          "(file_name,file_path,file_hdfs_time,end_time,status,error_msg) " + \
+                          " values (%s, %s, %s, %s, %s, %s)" + \
+                          " on DUPLICATE KEY UPDATE end_time=%s, status=%s, error_msg=%s"
 
     # if status is processing, wait
     if file_load_status == "processing":
@@ -301,19 +309,20 @@ def file_to_tempdb(file_name, file_path, pk_string):
             end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             file_error_val = (
                 file_name, file_path, file_modify_time, end_time, "fail", error_msg, end_time, "fail", error_msg)
-            mysql_executor(file_log_result_sql,file_error_val )
+            mysql_executor(file_log_result_sql, file_error_val)
             raise FileloadError(error_msg)
 
     # if status is success,
     if file_load_status == "success":
         print("Original File load status: {}".format(file_load_status))
         if file_modify_time_obj <= file_time_in_log_obj:
-            #try:
+            # try:
             #    end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
-            #except:
+            # except:
             #    error_msg = "COPY csv to PG temp table fail..."
             #    raise FileloadError(error_msg)
-            #else:
+            # else:
+            print("CSV File in HDFS and table in the PG have same timestamp, no need to load.")
             return file_modify_time
         else:
             # start copy new data to local
@@ -332,7 +341,7 @@ def file_to_tempdb(file_name, file_path, pk_string):
                 print(file_name + " copy to local success...")
                 # start load data to tmp table
                 try:
-                    end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
+                    end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string, tag_storage_type)
                 except Exception as e:
                     error_msg = (str(e))
                     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -358,7 +367,6 @@ def file_to_tempdb(file_name, file_path, pk_string):
                 mysql_executor(file_log_result_sql, file_error_val)
                 raise FileloadError(error_msg)
 
-
     # if status is fail, just start csv file loading
     if file_load_status == "fail":
         print("Original File load status: {}".format(file_load_status))
@@ -378,7 +386,7 @@ def file_to_tempdb(file_name, file_path, pk_string):
             print(file_name + " copy to local success...")
             # start load data to tmp table
             try:
-                end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string)
+                end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string, tag_storage_type)
             except Exception as e:
                 error_msg = (str(e))
                 end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -401,7 +409,3 @@ def file_to_tempdb(file_name, file_path, pk_string):
                 file_name, file_path, file_modify_time, end_time, "fail", error_msg, end_time, "fail", error_msg)
             mysql_executor(file_log_result_sql, file_error_val)
             raise FileloadError(error_msg)
-
-
-
-

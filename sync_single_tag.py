@@ -48,6 +48,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     target_schema = task_detail_list[0][2]
     target_table  = task_detail_list[0][3]
     tag_data_type = task_detail_list[0][4]
+    tag_storage_type = task_detail_list[0][5]
 
     # log write sql
     tag_log_sql = "insert into " + log_tag_table + \
@@ -71,7 +72,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
 
     # add data to temp table and delete duplicates
     try:
-        file_modify_time = tb.file_to_tempdb(file_name, file_path, pk_string[0][0])
+        file_modify_time = tb.file_to_tempdb(file_name, file_path, pk_string[0][0], tag_storage_type)
     except FileloadError as e:
         end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         tag_log_val = (request_id, task_id, tag_name_en, file_name, None,
