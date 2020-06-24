@@ -26,7 +26,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     mysql_tables_cfg = config['mysql_tables']
 
     log_file_table = mysql_tables_cfg['log_file']
-    log_tag_table  = mysql_tables_cfg['log_tag']
+    log_tag_table = mysql_tables_cfg['log_tag']
     cfg_pk_table = mysql_tables_cfg['pk_table']
 
     # Get the source schema
@@ -42,19 +42,23 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     task_detail_list = tb.mysql_executor(task_detail_sql, task_detail_val)
 
     print("The Execute parameters: {}".format(task_detail_list))
-    # start loading file to local file system
-    file_name = task_detail_list[0][0]
-    file_path = task_detail_list[0][1]
-    target_schema = task_detail_list[0][2]
-    target_table  = task_detail_list[0][3]
-    tag_data_type = task_detail_list[0][4]
-    tag_storage_type = task_detail_list[0][5]
+    # start get execute parameters
+    if len(task_detail_list) > 0:
+        file_name = task_detail_list[0][0]
+        file_path = task_detail_list[0][1]
+        target_schema = task_detail_list[0][2]
+        target_table = task_detail_list[0][3]
+        tag_data_type = task_detail_list[0][4]
+        tag_storage_type = task_detail_list[0][5]
+    else:
+        error_msg = "The task id cannot get request record in {}.".format(cfg_table)
+        raise Exception(error_msg)
 
     # log write sql
     tag_log_sql = "insert into " + log_tag_table + \
-                   "(request_id, sync_task_id, tag_name_en, file_name, file_hdfs_time, " + \
-                   "start_time, end_time, status, error_msg) " + \
-                   " values (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                  "(request_id, sync_task_id, tag_name_en, file_name, file_hdfs_time, " + \
+                  "start_time, end_time, status, error_msg) " + \
+                  " values (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
     start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # get table primary key list
@@ -64,7 +68,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     pk_string = tb.mysql_executor(get_pk_sql, val)
     if len(pk_string) == 0:
         end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        error_msg = target_table +  " Primary key cannot be fetched."
+        error_msg = target_table + " Primary key cannot be fetched."
         tag_log_val = (request_id, task_id, tag_name_en, file_name, None,
                        start_time, end_time, "fail", error_msg)
         tb.mysql_executor(tag_log_sql, tag_log_val)
@@ -83,7 +87,8 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
         try:
             temp_table = file_name.split(".")[0] + "_dedup"
             print("Start to tag merge {}.{} ===> {}.{}...".format(temp_schema, temp_table, target_schema, target_table))
-            tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string[0][0], tag_name_en, tag_data_type)
+            tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string[0][0], tag_name_en,
+                         tag_data_type)
         except Exception as e:
             end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             tag_log_val = (request_id, task_id, tag_name_en, file_name, None,
@@ -95,7 +100,6 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
             tag_log_val = (request_id, task_id, tag_name_en, file_name, file_modify_time,
                            start_time, end_time, "success", None)
             tb.mysql_executor(tag_log_sql, tag_log_val)
-
 
 
 if __name__ == '__main__':
