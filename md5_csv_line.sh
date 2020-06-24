@@ -25,6 +25,7 @@ cat /dev/null > "${HASH_FILE}"
 # avoid duplicated record, add line_no to generate md5dum
 i=0
 cat "$@" | while read -r line; do
+    i=$((i+1))
     printf "%s,%s" "${line}" "${i}" | md5sum | cut -f1 -d' '  >> "${HASH_FILE}"
 done
 
