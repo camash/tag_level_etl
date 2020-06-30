@@ -116,15 +116,18 @@ def cast_field_type(tag_name, tag_data_type):
         raise Exception(error_msg)
 
 
-def gen_st_point(column_str):
+def reformat_pk_str(column_str):
     """ when confront geo_point string, constructs PostGIS ST_Geometry point object
+    when confront level field, cast to integer
     :param column_str: the string of columns delimited by comma
     :return: reformatted column string
     """
     column_list = list()
     for col in column_str.split(','):
         if "geo_point" == col.lower():
-            column_list.append("ST_PointFromText({})".format(col))
+            column_list.append('cast(st_pointfromtext({}) as "public"."geometry")'.format(col))
+        elif "level" == col.lower():
+            column_list.append('cast("{}" as integer)'.format(col))
         else:
             column_list.append(col)
 
@@ -148,7 +151,7 @@ def merge_tag(source_schema, source_table, target_schema, target_table, pk_strin
     """
     merge_fields = "({}, {})".format(pk_string, tag_name)
     cast_field = cast_field_type(tag_name, tag_data_type)
-    source_pk_string = gen_st_point(pk_string)
+    source_pk_string = reformat_pk_str(pk_string)
     source_fields = "{}, {}".format(source_pk_string, cast_field)
     merge_sql = "insert into " + target_table + merge_fields + \
                 "   (select " + source_fields + " from " + source_schema + "." + source_table + ")" + \
