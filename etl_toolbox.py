@@ -116,6 +116,23 @@ def cast_field_type(tag_name, tag_data_type):
         raise Exception(error_msg)
 
 
+def gen_st_point(column_str):
+    """ when confront geo_point string, constructs PostGIS ST_Geometry point object
+    :param column_str: the string of columns delimited by comma
+    :return: reformatted column string
+    """
+    column_list = list()
+    for col in column_str.split(','):
+        if "geo_point" == col.lower():
+            column_list.append("ST_PointFromText({})".format(col))
+        else:
+            column_list.append(col)
+
+    new_str = ','.join(column_list)
+    print("The primary key list from temp table is: {}".format(new_str))
+    return new_str
+
+
 # merge new data
 def merge_tag(source_schema, source_table, target_schema, target_table, pk_string, tag_name, tag_data_type):
     """
@@ -131,7 +148,8 @@ def merge_tag(source_schema, source_table, target_schema, target_table, pk_strin
     """
     merge_fields = "({}, {})".format(pk_string, tag_name)
     cast_field = cast_field_type(tag_name, tag_data_type)
-    source_fields = "{}, {}".format(pk_string, cast_field)
+    source_pk_string = gen_st_point(pk_string)
+    source_fields = "{}, {}".format(source_pk_string, cast_field)
     merge_sql = "insert into " + target_table + merge_fields + \
                 "   (select " + source_fields + " from " + source_schema + "." + source_table + ")" + \
                 " on conflict (" + pk_string + ") do update " + \
