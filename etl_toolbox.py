@@ -125,7 +125,7 @@ def reformat_pk_str(column_str):
     column_list = list()
     for col in column_str.split(','):
         if "geo_point" == col.lower():
-            column_list.append('cast(st_pointfromtext({}) as "public"."geometry")'.format(col))
+            column_list.append('cast(public.st_pointfromtext({}) as "public"."geometry")'.format(col))
         elif "level" == col.lower():
             column_list.append('cast("{}" as integer)'.format(col))
         else:
