@@ -301,6 +301,8 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type, der
         cur.execute(dedup_sql)
     except Exception as e:
         raise FileloadError(str(e))
+    else:
+        conn.commit()
 
     # handle the temp table for derived field
     if derived_tuple:
