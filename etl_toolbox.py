@@ -55,6 +55,48 @@ def mysql_executor(sqlstring, values):
         print(mycursor.rowcount, "record inserted.")
 
 
+def postgre_desc_table(schema_name, table_name):
+    """
+    get column list from postgresql
+    :param schema_name: the schema of table located
+    :param table_name: the name of table
+    :return: list of field names
+    """
+    # read postgres connection info
+    config = configparser.ConfigParser()
+    config.read('connection.cfg')
+
+    pg_cfg = config['postgre']
+    pg_host = pg_cfg['pg_host']
+    pg_user = pg_cfg['pg_user']
+    pg_pass = pg_cfg['pg_pass']
+    pg_db = pg_cfg['pg_db']
+    # pg_port = pg_cfg['pg_port']
+    # tmp_schema = pg_cfg['tmp_schema']
+
+    # create a connection
+    try:
+        conn = psycopg2.connect(dbname=pg_db,
+                                user=pg_user,
+                                host=pg_host,
+                                password=pg_pass,
+                                options=f'-c search_path={schema_name}',
+                                )
+        cur = conn.cursor()
+        sql_string = "Select * FROM {} LIMIT 0".format(table_name)
+        cur.execute(sql_string)
+        col_names = [desc[0] for desc in cur.description]
+        print(col_names)
+    except Exception as e:
+        error_msg = "PSQL desc table error, {}".format(str(e))
+        print(error_msg)
+        raise Exception(error_msg)
+    else:
+        return col_names
+    finally:
+        conn.close()
+
+
 def postgre_executor(schema_name, sql_string, sql_val):
     """
     execute sql on Postgre database
@@ -170,12 +212,13 @@ def merge_tag(source_schema, source_table, target_schema, target_table, pk_strin
         print("PSQL execute result: {}".format(result))
 
 
-def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
+def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type, derived_tuple):
     """ load local file to postgresql
     :param table_name: the table_name of the file
     :param local_file_path: the file in the local path
     :param pk_string: the primary key string
     :param tag_storage_type: tag or detail type
+    :param derived_tuple: tuple of derived field information
     :return:
     """
 
@@ -242,6 +285,12 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
         conn.commit()
         print("load csv complete...")
 
+    # while there is derived field, change pk_string during delete duplicates
+    if derived_tuple:
+        derived_field = derived_tuple[0]
+        pk_string_list = [x for x in pk_string.split(",") if x != derived_field]
+        pk_string = ",".join(pk_string_list)
+
     # delete duplicated
     dedup_table_name = table_name + '_dedup'
     dedup_sql = "drop table if exists " + dedup_table_name + ";" + \
@@ -252,19 +301,100 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type):
         cur.execute(dedup_sql)
     except Exception as e:
         raise FileloadError(str(e))
-    finally:
-        conn.commit()
-        conn.close()
+
+    # handle the temp table for derived field
+    if derived_tuple:
+        create_derived_sql = create_derived_table(tmp_schema, dedup_table_name, derived_tuple)
+        try:
+            cur.execute(create_derived_sql)
+        except Exception as e:
+            raise FileloadError(str(e))
+
+    conn.commit()
+    conn.close()
 
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type):
-    """load file to tempdb in mysql
+def create_derived_table(schema_name, table_name, derived_tuple):
+    """ create a temp table contain derived field
+    :param schema_name: schema name of table located
+    :param table_name: the temp table name
+    :param derived_tuple: format is (field_name, "source_column:derived_value:tag_name")
+     e.g
+        (brand, "xx_val:t:val,yy_val:f:val")
+        if we have the source table
+        id|xx_val|yy_val|other
+        1|a|b|good
+        2|c|d|bad
+
+        after transfer, it will be
+        id|val|brand|other
+        1|a|t|good
+        1|b|f|good
+        2|c|t|bad
+        2|d|f|bad
+
+    :return:
+    """
+    derived_table_name = table_name + "_derived"
+    drop_table_sql = "drop table if exist {}".format(derived_table_name)
+    derived_field = derived_tuple[0]
+    derived_source_str = derived_tuple[1]
+
+    # get the fields list from the original temp table
+    fields_list = postgre_desc_table(schema_name, table_name)
+
+    # put the derived source fields and new value to list
+    derived_src_fields_list = list()
+    derived_value_list = list()
+    tag_list = list()
+    for item in derived_source_str.split(","):
+        derived_src_fields_list.append(item.split(":")[0])
+        derived_value_list.append(item.split(":")[1])
+        tag_list.append(item.split(":")[2])
+
+    # delete the derived source fields from full fields
+    clean_fields_list = [x for x in fields_list if x not in derived_src_fields_list]
+
+    # generate sql select list
+    select_list = list()
+    for i in range(len(derived_src_fields_list)):
+        # it will be like: select id, other, xx_val as val, 't' as brand from t where xx_val is not null
+        select_str = "select {}, {} as {}, '{}' as {} from {} where {} is not null". \
+            format(",".join(clean_fields_list),
+                   derived_src_fields_list[i], tag_list[i],
+                   derived_value_list[i], derived_field, table_name,
+                   derived_src_fields_list[i])
+        select_list.append(select_str)
+
+    union_sql = "create table {} as ".format(derived_table_name)
+
+    select_count = len(select_list)
+    for i in range(select_count):
+        union_sql = union_sql + "\n" + select_count[i]
+        if i < select_count - 1:
+            union_sql = union_sql + "\n" + "union all"
+
+    print("The union sql for derived field is:")
+    print(select_count)
+
+    try:
+        print("Start to create derived field temp table {}".format(derived_table_name))
+        result = postgre_executor(schema_name, union_sql, None)
+    except Exception as e:
+        raise Exception(str(e))
+    else:
+        print("PSQL execute result: {}".format(result))
+
+
+def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type, derived_tuple):
+    """load file to tempdb in postgresql
     :param file_name: the file name of algorithm output csv
     :param file_path: the file path in the HDFS
     :param pk_string: primary key list for the target table
     :param tag_storage_type: tag or detail
+    :param derived_tuple: a tuple store the information of derived field
     :return: file_modify_time , the time of hdfs csv file modified
     """
 
@@ -365,7 +495,7 @@ def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type):
                 print(file_name + " copy to local success...")
                 # start load data to tmp table
                 try:
-                    end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string, tag_storage_type)
+                    end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string, tag_storage_type, derived_tuple)
                 except Exception as e:
                     error_msg = (str(e))
                     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -410,7 +540,7 @@ def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type):
             print(file_name + " copy to local success...")
             # start load data to tmp table
             try:
-                end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string, tag_storage_type)
+                end_time_string = load_csv_to_pg(tmp_table_name, local_file_path, pk_string, tag_storage_type, derived_tuple)
             except Exception as e:
                 error_msg = (str(e))
                 end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -433,3 +563,5 @@ def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type):
                 file_name, file_path, file_modify_time, end_time, "fail", error_msg, end_time, "fail", error_msg)
             mysql_executor(file_log_result_sql, file_error_val)
             raise FileloadError(error_msg)
+
+
