@@ -370,16 +370,16 @@ def create_derived_table(schema_name, table_name, derived_tuple):
                    derived_src_fields_list[i])
         select_list.append(select_str)
 
-    union_sql = "create table {} as ".format(derived_table_name)
+    union_sql = "drop table if exist {}; \n create table {} as ".format(derived_table_name,derived_table_name)
 
     select_count = len(select_list)
     for i in range(select_count):
-        union_sql = union_sql + "\n" + select_count[i]
+        union_sql = union_sql + "\n" + select_list[i]
         if i < select_count - 1:
             union_sql = union_sql + "\n" + "union all"
 
     print("The union sql for derived field is:")
-    print(select_count)
+    print(union_sql)
 
     try:
         print("Start to create derived field temp table {}".format(derived_table_name))
