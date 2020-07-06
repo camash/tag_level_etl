@@ -51,6 +51,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
         target_table = task_detail_list[0][3]
         tag_data_type = task_detail_list[0][4]
         tag_storage_type = task_detail_list[0][5]
+        tag_upload_method = task_detail_list[0][6]
     else:
         error_msg = "The task id cannot get request record in {}.".format(cfg_table)
         raise Exception(error_msg)
@@ -106,6 +107,10 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
                        start_time, end_time, "fail", str(e))
         tb.mysql_executor(tag_log_sql, tag_log_val)
     else:
+        # if upload method is full, need set null for that column
+        if tag_upload_method == "full":
+            tb.column_set_null(target_schema, target_table, tag_name_en)
+
         # start merge tags
         try:
             temp_table = file_name.split(".")[0] + "_dedup"
@@ -132,13 +137,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('task_id', help='the unique id of task to sync tag')
     parser.add_argument('tag_name_en', help='English name of tag')
-    parser.add_argument('request_id', help='the id provided by app to link the original log')
+    #parser.add_argument('request_id', help='the id provided by app to link the original log')
 
     # Parse arguments.
     args = parser.parse_args()
     task_id = args.task_id
     tag_name_en = args.tag_name_en
-    request_id = args.request_id
+    #request_id = args.request_id
+    request_id = 0
 
     # get task detail
     sync_single_task(task_id, tag_name_en, request_id)

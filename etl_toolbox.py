@@ -562,3 +562,18 @@ def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type, derived_tu
             raise FileloadError(error_msg)
 
 
+def column_set_null(schema_name, table_name, column_name):
+    """set whole column value to null
+    :param schema_name: schema name of target table
+    :param table_name: target table name
+    :param column_name: column to be set null
+    :return:
+    """
+
+    set_sql = "update {} set {} = NULL".format(table_name, column_name)
+    try:
+        postgre_executor(schema_name, set_sql, None)
+    except Exception as e:
+        print(str(e))
+    else:
+        print("Column {} of {} is set to null.".format(column_name, table_name))
