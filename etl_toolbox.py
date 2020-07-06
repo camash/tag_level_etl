@@ -340,7 +340,7 @@ def create_derived_table(schema_name, table_name, derived_tuple):
     :return:
     """
     derived_table_name = table_name + "_derived"
-    drop_table_sql = "drop table if exist {}".format(derived_table_name)
+    drop_table_sql = "drop table if exists {}".format(derived_table_name)
     derived_field = derived_tuple[0]
     derived_source_str = derived_tuple[1]
 
