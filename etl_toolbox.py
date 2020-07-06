@@ -382,7 +382,7 @@ def create_derived_table(schema_name, table_name, derived_tuple):
     print("The union sql for derived field is:")
     print(union_sql)
 
-    return drop_table_sql + "\n" + union_sql
+    return drop_table_sql + ";\n" + union_sql
 
 
 def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type, derived_tuple):
