@@ -35,7 +35,7 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
 
     # get tag sync detail, generate sql
     task_detail_sql = "select src_file_name, src_file_path, schema_name, table_name, tag_data_type, " + \
-                      " tag_storage_type, upload_method, derived_field, derived_value, derived_source_column from " + \
+                      " tag_storage_type, upload_method from " + \
                       cfg_table + \
                       " where task_id = %s and tag_name_en = %s "
     task_detail_val = (task_id, tag_name_en)
@@ -51,9 +51,6 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
         target_table = task_detail_list[0][3]
         tag_data_type = task_detail_list[0][4]
         tag_storage_type = task_detail_list[0][5]
-        derived_field = task_detail_list[0][7]
-        derived_value = task_detail_list[0][8]
-        derived_source_column = task_detail_list[0][9]
     else:
         error_msg = "The task id cannot get request record in {}.".format(cfg_table)
         raise Exception(error_msg)
@@ -61,15 +58,15 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
     # check if target table has derived field, currently only support only 1 derived field.
     # !! It bases on the file<>table relation level !!
     check_derived_sql = "select derived_field, " + \
-                        "group_concat(concat(derived_source_column, ':', derived_value, ':', tag_name_en)), " + \
-                        " src_file_name from " +\
+                        "group_concat(concat(derived_source_column, ':', derived_value, ':', tag_name_en)) " + \
+                        " from " +\
                         cfg_table + \
-                        " where schema_name = %s and table_name = %s " + \
+                        " where schema_name = %s and table_name = %s and src_file_name = %s " + \
                         " and derived_field is not null" + \
                         " and derived_value is not null" + \
                         " and derived_source_column is not null" + \
-                        " group by derived_field, src_file_name "
-    check_derived_val = (target_schema, target_table)
+                        " group by derived_field"
+    check_derived_val = (target_schema, target_table, file_name)
     derived_list = tb.mysql_executor(check_derived_sql, check_derived_val)
     derived_tuple = tuple()
     if len(derived_list) == 0:
@@ -112,6 +109,8 @@ def sync_single_task(task_id, tag_name_en, request_id=None):
         # start merge tags
         try:
             temp_table = file_name.split(".")[0] + "_dedup"
+            if derived_tuple:
+                temp_table = temp_table + "_derived"
             print("Start to tag merge {}.{} ===> {}.{}...".format(temp_schema, temp_table, target_schema, target_table))
             tb.merge_tag(temp_schema, temp_table, target_schema, target_table, pk_string[0][0], tag_name_en,
                          tag_data_type)
