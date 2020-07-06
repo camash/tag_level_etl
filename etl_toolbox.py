@@ -310,6 +310,7 @@ def load_csv_to_pg(table_name, local_file_path, pk_string, tag_storage_type, der
         try:
             cur.execute(create_derived_sql)
         except Exception as e:
+            print("Create derived table {}_derived succeed.".format(dedup_table_name))
             raise FileloadError(str(e))
 
     conn.commit()
@@ -337,7 +338,7 @@ def create_derived_table(schema_name, table_name, derived_tuple):
         2|c|t|bad
         2|d|f|bad
 
-    :return:
+    :return: sql string to create the derived table
     """
     derived_table_name = table_name + "_derived"
     drop_table_sql = "drop table if exists {}".format(derived_table_name)
@@ -381,14 +382,7 @@ def create_derived_table(schema_name, table_name, derived_tuple):
     print("The union sql for derived field is:")
     print(union_sql)
 
-    try:
-        print("Start to create derived field temp table {}".format(derived_table_name))
-        postgre_executor(schema_name, drop_table_sql, None)
-        result = postgre_executor(schema_name, union_sql, None)
-    except Exception as e:
-        raise Exception(str(e))
-    else:
-        print("PSQL execute result: {}".format(result))
+    return drop_table_sql + "\n" + union_sql
 
 
 def file_to_tempdb(file_name, file_path, pk_string, tag_storage_type, derived_tuple):
