@@ -370,7 +370,7 @@ def create_derived_table(schema_name, table_name, derived_tuple):
                    derived_src_fields_list[i])
         select_list.append(select_str)
 
-    union_sql = "drop table if exist {}; \n create table {} as ".format(derived_table_name,derived_table_name)
+    union_sql = "create table {} as ".format(derived_table_name, derived_table_name)
 
     select_count = len(select_list)
     for i in range(select_count):
@@ -383,6 +383,7 @@ def create_derived_table(schema_name, table_name, derived_tuple):
 
     try:
         print("Start to create derived field temp table {}".format(derived_table_name))
+        postgre_executor(schema_name, drop_table_sql, None)
         result = postgre_executor(schema_name, union_sql, None)
     except Exception as e:
         raise Exception(str(e))
